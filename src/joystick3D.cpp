@@ -21,6 +21,12 @@
 #include <signal.h>
 #include <array>
 #include <cmath>
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+#include <chrono>
+#include <ctime>
+#include <cstddef>         // std::size_t
 
 #include <BaseClientRpc.h>
 #include <SessionManager.h>
@@ -43,6 +49,7 @@ double old_grasp;
 int mode;
 int switch_count;
 bool quit;
+ofstream outfile;
 
 void sig(int s)
 {
@@ -50,17 +57,61 @@ void sig(int s)
 	exit(0);
 }
 
+void setup_file(char *task, char* participant)
+{
+	string fname = "../sessions/";
+	fname.append(task);
+	fname.append("3D");
+	fname.append(participant);
+    std::time_t t = std::time(nullptr);
+	char mbstr[100];
+    if (std::strftime(mbstr, sizeof(mbstr), "%y%m%e%H%M", std::localtime(&t))) {
+	    fname.append(mbstr);
+    }
+	outfile.open(fname);
+	std::size_t found = fname.find_last_of("/\\");
+	char timestr[100];
+    outfile << "*************************************** INFO ***************************************\n";
+    outfile << "Filename: " << fname.substr(found + 1) << "\n";
+    if (std::strftime(timestr, sizeof(timestr), "%c", std::localtime(&t))) {
+    outfile << "Date: " << timestr << "\n";
+    }
+    outfile << "Task: " << task << "\n";
+    outfile << "Participant: " << participant << "\n";
+    outfile << "************************************** FORMAT **************************************\n";
+    outfile << "mode\n";
+    outfile << "motion force command [linear_x linear_y linear_z angular_x angular_y angular_z]\n";
+    outfile << "gripper force command [open/close]\n";
+    outfile << "************************************************************************************\n";
+    cout << "\nWriting to file: " << fname.substr(found + 1) << endl;
+}
+
+void write_to_file() 
+{
+	// write mode
+	outfile << mode << "\n";
+	// write motion force command
+	for (int i = 0; i < old_motion.size(); ++i) {
+		outfile << old_motion.at(i) << " ";
+	}
+	outfile << "\n";
+	// write gripper force command
+	outfile << old_grasp << "\n";
+	// separate by a new line
+	outfile << "\n";
+}
+
 void print_mode() 
 {
     switch(mode) {
         case MODE_TRANS:
-            std::cout << "\nTranslation Mode" << std::endl;
+            std::cout << "\nTRANSLATION MODE" << std::endl;
             break;
         case MODE_WRIST:
-            std::cout << "\nWrist Orientation Mode" << std::endl;
+            std::cout << "\nWRIST ORIENTATION MODE" << std::endl;
             break;
         case MODE_FINGER:
-            std::cout << "\nFinger Mode" << std::endl;
+            std::cout << "\nFINGER MODE" << std::endl;
             break;
         default:
             break;
@@ -93,7 +144,7 @@ void send_gripper_command(k_api::Base::BaseClient* pBase, double val)
 	finger->set_value(val);
 	output.set_duration(0);    
 	pBase->SendGripperCommand(output);
-	cout << "sending grasp command " << val << endl;
+	cout << "gripper command: " << val << endl;
 }
 
 double map_x(double x)
@@ -141,7 +192,7 @@ bool handle_motion(k_api::Base::BaseClient* pBase, spnav_event_motion motion, ar
 			v = {0, 0, 0, 0, 0, 0};
 			x = map_x((double)motion.z);
 			if (x != old_grasp) {
-				send_gripper_command(pBase, x);
+				// send_gripper_command(pBase, x);
 				old_grasp = x;
 			}
 			break;
@@ -181,16 +232,17 @@ void loop(k_api::Base::BaseClient* pBase)
 	mode = 0;
 	old_grasp = 0.0;
 	print_mode();
+	// setup_file();
 	while (!quit) {
-		usleep(1000);
+		usleep(10000);
 		spnav_event sev;
 		if (spnav_wait_event(&sev)) {
 			if(sev.type == SPNAV_EVENT_MOTION) {
 				array<double, 6> new_motion;
 				if (handle_motion(pBase, sev.motion, new_motion)) {
 					old_motion = new_motion;
-					send_twist_command(pBase, new_motion);
-					cout << "SENDING NEW COMMAND: ";
+					// send_twist_command(pBase, new_motion);
+					cout << "motion command: ";
 					for (int i = 0; i < new_motion.size(); ++i) {
 						cout << new_motion.at(i) << " ";
 					}
@@ -199,10 +251,12 @@ void loop(k_api::Base::BaseClient* pBase)
 			} else if (sev.button.press) {    /* SPNAV_EVENT_BUTTON */
 				handle_button(sev.button.bnum);
 			}
-		} 
+		}
+		write_to_file();
 	}
 	spnav_close();
 	cout << "TOTAL MODE SWITCHES: " << switch_count << endl;
+	outfile << "TOTAL MODE SWITCHES: " << switch_count << endl;
 }
 
 int main(int argc, char **argv)
@@ -229,26 +283,35 @@ int main(int argc, char **argv)
 	auto pBase = new k_api::Base::BaseClient(pRouter);
 
 	// Move arm to ready position
-	cout << "Moving the arm to a safe position before executing example\n" << endl;
-	auto action_type = k_api::Base::RequestedActionType();
-	action_type.set_action_type(k_api::Base::REACH_JOINT_ANGLES);
-	auto action_list = pBase->ReadAllActions(action_type);
-	auto action_handle = k_api::Base::ActionHandle();
-	action_handle.set_identifier(0); 
-	for( auto action : action_list.action_list()) {
-	    if(action.name() == "Home") {
-	        action_handle = action.handle();
-	    }
-	}
+	// cout << "Moving the arm to a safe position before executing example\n" << endl;
+	// auto action_type = k_api::Base::RequestedActionType();
+	// action_type.set_action_type(k_api::Base::REACH_JOINT_ANGLES);
+	// auto action_list = pBase->ReadAllActions(action_type);
+	// auto action_handle = k_api::Base::ActionHandle();
+	// action_handle.set_identifier(0); 
+	// for( auto action : action_list.action_list()) {
+	//     if(action.name() == "Home") {
+	//         action_handle = action.handle();
+	//     }
+	// }
 
-	if(action_handle.identifier() == 0) {
-	    cout << "\nCan't reach safe position. Exiting" << endl;       
+	// if(action_handle.identifier() == 0) {
+	//     cout << "\nCan't reach safe position. Exiting" << endl;       
+	// } else {
+	//     pBase->ExecuteActionFromReference(action_handle);
+	//     this_thread::sleep_for(chrono::seconds(5)); // Leave time to action to finish
+	// }
+	if (argc <= 2) {
+		cout << "\nTo save data to file call program with args [TASK] [PARTICIPANT]" << endl;
+		cout << "Running without saving data" << endl;
+		loop(pBase);
 	} else {
-	    pBase->ExecuteActionFromReference(action_handle);
-	    this_thread::sleep_for(chrono::seconds(5)); // Leave time to action to finish
+		setup_file(argv[1], argv[2]);
+		if (outfile.is_open()) {
+			loop(pBase);
+		}
+		outfile.close();
 	}
-	
-	loop(pBase);
 	// Close API session
 	pSessionMng->CloseSession();
 

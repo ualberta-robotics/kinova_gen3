@@ -1,0 +1,12 @@
+*************************************** INFO ***************************************
+Filename: Banana3DMasood1907191432
+Date: Fri Jul 19 14:32:18 2019
+Task: Banana
+Participant: Masood
+************************************** FORMAT **************************************
+motion force command [linear_x linear_y linear_z angular_x angular_y angular_z]
+gripper force command [open/close]
+************************************************************************************
+0 0 0 0 0 0 
+0
+
