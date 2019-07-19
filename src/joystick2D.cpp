@@ -10,7 +10,7 @@
 *
 */
 
-#include "joystick.hh"
+#include "joystick2d.hh"
 #include <unistd.h>
 #include <array>
 
@@ -33,6 +33,7 @@ namespace k_api = Kinova::Api;
 
 const float GAINS = 0.5;
 int mode;
+int switch_count;
 bool quit;
 
 void print_mode() 
@@ -74,6 +75,11 @@ void send_twist_command(k_api::Base::BaseClient* pBase, const std::array<float, 
     twist->set_angular_y(cmd.at(4));
     twist->set_angular_z(cmd.at(5));
     pBase->SendTwistCommand(command);
+    std::cout << "SENDING NEW COMMAND: ";
+    for (int i = 0; i < cmd.size(); ++i) {
+        std::cout << cmd.at(i) << " ";
+    }
+    std::cout << std::endl;
 }
 
 void send_gripper_command(k_api::Base::BaseClient* pBase, float cmd)
@@ -134,6 +140,7 @@ void handle_button(int button)
         case BUTTON_BLUE:
             mode = (mode + 1) % 4;
             print_mode();
+            switch_count += 1;
             break;
         case BUTTON_RED:
             quit = true;
@@ -146,18 +153,19 @@ void loop(k_api::Base::BaseClient* pBase)
 // void loop()
 {
     // Setup Joystick
-    Joystick joystick("/dev/input/js0");
+    Joystick2D joystick("/dev/input/js0");
     if (!joystick.isFound()) {
         printf("open failed.\n");
         exit(1);
     }
     quit = false;
     mode = 0;
+    switch_count = 0;
     print_mode();
     int joystick_initialized = 0;
     while (!quit) {
         usleep(1000);
-        JoystickEvent event;
+        Joystick2DEvent event;
         if (joystick.sample(&event) && joystick_initialized++ > 18){
             if (event.isButton() && event.value == 1) {
                 handle_button(event.number);
@@ -168,6 +176,7 @@ void loop(k_api::Base::BaseClient* pBase)
             }
         }
     }
+    std::cout << "TOTAL MODE SWITCHES: " << switch_count << std::endl;
 }
 
 int main(int argc, char **argv)
