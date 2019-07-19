@@ -10,6 +10,11 @@
 *
 */
 
+/* 
+* Author: Laura Petrich
+* Date: July 19, 2019
+*/
+
 #include "joystick2d.hh"
 #include <unistd.h>
 #include <array>
@@ -63,11 +68,6 @@ void send_twist_command(k_api::Base::BaseClient* pBase, const std::array<float, 
     command.set_duration(0);  // Unlimited time to execute
 
     auto twist = command.mutable_twist();
-    // std::cout << "command: ";
-    // for (int i = 0; i < 6; ++i) {
-    //     std::cout << cmd.at(i) << " "; 
-    // }
-    // std::cout << std::endl;
     twist->set_linear_x(cmd.at(0));
     twist->set_linear_y(cmd.at(1));
     twist->set_linear_z(cmd.at(2));
@@ -84,7 +84,6 @@ void send_twist_command(k_api::Base::BaseClient* pBase, const std::array<float, 
 
 void send_gripper_command(k_api::Base::BaseClient* pBase, float cmd)
 {
-    // std::cout << "gripper command: " << cmd << std::endl;
     k_api::Base::GripperCommand output;
     output.set_mode(k_api::Base::GRIPPER_FORCE);
     auto gripper = output.mutable_gripper();
@@ -98,7 +97,6 @@ void send_gripper_command(k_api::Base::BaseClient* pBase, float cmd)
 
 void move_axis(k_api::Base::BaseClient* pBase, int axis, float direction)
 {
-    // std::cout << axis << " " << direction << std::endl;
     std::array<float, 6> command;
     switch(mode) {
         case MODE_XY:
@@ -127,7 +125,6 @@ void move_axis(k_api::Base::BaseClient* pBase, int axis, float direction)
                 send_gripper_command(pBase, direction);
             }
             return;
-            // break;
         default:
             break;
     }
@@ -149,8 +146,8 @@ void handle_button(int button)
             break;
     }
 }
+
 void loop(k_api::Base::BaseClient* pBase)
-// void loop()
 {
     // Setup Joystick
     Joystick2D joystick("/dev/input/js0");
@@ -169,10 +166,8 @@ void loop(k_api::Base::BaseClient* pBase)
         if (joystick.sample(&event) && joystick_initialized++ > 18){
             if (event.isButton() && event.value == 1) {
                 handle_button(event.number);
-                // printf("Button %u is %s\n", event.number, event.value == 0 ? "up" : "down");
             } else if (event.isAxis()) {
                 move_axis(pBase, event.number, event.value / AXISVALUE);
-                // printf("Axis %u is at position %d\n", event.number, event.value);
             }
         }
     }
@@ -223,7 +218,7 @@ int main(int argc, char **argv)
     }
     
     loop(pBase);
-    // loop();
+
     // Close API session
     pSessionMng->CloseSession();
 

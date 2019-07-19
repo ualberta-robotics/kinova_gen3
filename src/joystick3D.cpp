@@ -10,12 +10,15 @@
 *
 */
 
+/* 
+* Author: Laura Petrich
+* Date: July 19, 2019
+*/
+
+#include "spnavkinova.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <spnav.h>
-// #include <iostream>
-// #include <unistd.h>
 #include <array>
 #include <cmath>
 
@@ -35,11 +38,11 @@ namespace k_api = Kinova::Api;
 #define MODE_WRIST 1 // Wrist Orientation Mode
 #define MODE_FINGER 2 // Finger Mode
 
-double old_grasp;
-bool quit;
 array<double, 6> old_motion;
+double old_grasp;
 int mode;
 int switch_count;
+bool quit;
 
 void sig(int s)
 {
@@ -81,7 +84,6 @@ void send_twist_command(k_api::Base::BaseClient* pBase, const array<double, 6> &
 
 void send_gripper_command(k_api::Base::BaseClient* pBase, double val)
 {
-	// cout << "gripper command: " << cmd << endl;
 	k_api::Base::GripperCommand output;
 	output.set_mode(k_api::Base::GRIPPER_FORCE);
 	auto gripper = output.mutable_gripper();
@@ -92,7 +94,6 @@ void send_gripper_command(k_api::Base::BaseClient* pBase, double val)
 	output.set_duration(0);    
 	pBase->SendGripperCommand(output);
 	cout << "sending grasp command " << val << endl;
-	// grip *= -1.0;
 }
 
 double map_x(double x)
@@ -128,7 +129,6 @@ bool handle_motion(k_api::Base::BaseClient* pBase, spnav_event_motion motion, ar
 	* angular y = -motion.rx
 	* angular z = motion.ry 
 	*******************************************************************************/
-	// cout << endl;
 	double x;
 	switch (mode) {
 		case MODE_TRANS:
@@ -144,32 +144,18 @@ bool handle_motion(k_api::Base::BaseClient* pBase, spnav_event_motion motion, ar
 				send_gripper_command(pBase, x);
 				old_grasp = x;
 			}
-			// if (x > 0) {
-			// 	cout << "GT0" << endl;
-			// } else if (x < 0) {
-			// 	cout << "LT0" << endl;
-			// } else {
-			// 	cout << "0" << endl;
-			// }
 			break;
 		default:
 			break;
 	}
-	// array<int, 6> tempv = {motion.z, -motion.x, motion.y, motion.rz, -motion.rx, motion.ry};
-	
-	// for (int i = 0; i < tempv.size(); ++i) {
-	// 	v.at(i) = map_x((double)tempv.at(i));
-	// 	// cout << tempv.at(i) << " -> " << v.at(i) << endl;
-	// }
 	if (v == old_motion) return false;
-	// cout << endl;
 	return true;
 
 
 }
 
 
-void handle_button(k_api::Base::BaseClient* pBase, int button) 
+void handle_button(int button) 
 {
 	if (button == 1) {
 		quit = true;
@@ -211,7 +197,7 @@ void loop(k_api::Base::BaseClient* pBase)
 					cout << endl;
 				} 
 			} else if (sev.button.press) {    /* SPNAV_EVENT_BUTTON */
-				handle_button(pBase, sev.button.bnum);
+				handle_button(sev.button.bnum);
 			}
 		} 
 	}
@@ -263,7 +249,6 @@ int main(int argc, char **argv)
 	}
 	
 	loop(pBase);
-	// loop();
 	// Close API session
 	pSessionMng->CloseSession();
 

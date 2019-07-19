@@ -10,12 +10,15 @@
 *
 */
 
+/* 
+* Author: Laura Petrich
+* Date: July 19, 2019
+*/
+
+#include "spnavkinova.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <signal.h>
-#include <spnav.h>
-// #include <iostream>
-// #include <unistd.h>
 #include <array>
 #include <cmath>
 
@@ -28,18 +31,64 @@ using namespace std;
 
 namespace k_api = Kinova::Api;
 
-
 #define IP_ADDRESS "192.168.1.12"
 #define PORT 10000
+#define MODE_MOTION 0 // Motion Mode
+#define MODE_FINGER 1 // Finger Mode
 
-double grip;
-bool quit;
 array<double, 6> old_motion;
+double old_grasp;
+int mode;
+int switch_count;
+bool quit;
 
 void sig(int s)
 {
 	spnav_close();
 	exit(0);
+}
+
+void print_mode() 
+{
+    switch(mode) {
+        case MODE_MOTION:
+            std::cout << "\nMotion Mode" << std::endl;
+            break;
+        case MODE_FINGER:
+            std::cout << "\nFinger Mode" << std::endl;
+            break;
+        default:
+            break;
+    }
+}
+
+void send_twist_command(k_api::Base::BaseClient* pBase, const array<double, 6> &v)
+{
+	auto command = k_api::Base::TwistCommand();
+	command.set_mode(k_api::Base::UNSPECIFIED_TWIST_MODE);
+	command.set_duration(1);  // set to 0 for unlimited time to execute
+	auto twist = command.mutable_twist();
+    twist->set_linear_x(v.at(0));
+    twist->set_linear_y(v.at(1));
+    twist->set_linear_z(v.at(2));
+    twist->set_angular_x(v.at(3));
+    twist->set_angular_y(v.at(4));
+    twist->set_angular_z(v.at(5));
+	pBase->SendTwistCommand(command);
+}
+
+void send_gripper_command(k_api::Base::BaseClient* pBase, double val)
+{
+	k_api::Base::GripperCommand output;
+	output.set_mode(k_api::Base::GRIPPER_FORCE);
+	auto gripper = output.mutable_gripper();
+	gripper->clear_finger();
+	auto finger = gripper->add_finger();
+	finger->set_finger_identifier(1);
+	finger->set_value(val);
+	output.set_duration(0);    
+	pBase->SendGripperCommand(output);
+	cout << "sending grasp command " << val << endl;
 }
 
 double map_x(double x)
@@ -64,7 +113,7 @@ double map_x(double x)
 	return floor((sgn * ret * 100) + .5) / 100;
 }
 
-bool handle_motion(spnav_event_motion motion, array<double, 6> &v)
+bool handle_motion(k_api::Base::BaseClient* pBase, spnav_event_motion motion, array<double, 6> &v)
 {   
 	/*******************************************************************************
 	* values are mapped wrong in spnav library
@@ -75,62 +124,43 @@ bool handle_motion(spnav_event_motion motion, array<double, 6> &v)
 	* angular y = -motion.rx
 	* angular z = motion.ry 
 	*******************************************************************************/
-	// cout << endl;
-	array<int, 6> tempv = {motion.z, -motion.x, motion.y, motion.rz, -motion.rx, motion.ry};
-	for (int i = 0; i < tempv.size(); ++i) {
-		v.at(i) = map_x((double)tempv.at(i));
-		// cout << tempv.at(i) << " -> " << v.at(i) << endl;
+	double x;
+	switch (mode) {
+		case MODE_MOTION:
+			v = {motion.z, -motion.x, motion.y, -motion.rx, motion.rz, -motion.ry};
+			for (int i = 0; i < v.size(); ++i) {
+				v.at(i) = map_x((double)v.at(i));
+			}
+			break;
+		case MODE_FINGER:
+			v = {0, 0, 0, 0, 0, 0};
+			x = map_x((double)motion.z);
+			if (x != old_grasp) {
+				send_gripper_command(pBase, x);
+				old_grasp = x;
+			}
+			break;
+		default:
+			break;		
 	}
 	if (v == old_motion) return false;
-	// cout << endl;
 	return true;
 
 
 }
 
-void send_twist_command(k_api::Base::BaseClient* pBase, const array<double, 6> &v)
-{
-	auto command = k_api::Base::TwistCommand();
-	command.set_mode(k_api::Base::UNSPECIFIED_TWIST_MODE);
-	command.set_duration(1);  // set to 0 for unlimited time to execute
-	auto twist = command.mutable_twist();
-    twist->set_linear_x(v.at(0));
-    twist->set_linear_y(v.at(1));
-    twist->set_linear_z(v.at(2));
-    twist->set_angular_x(v.at(3));
-    twist->set_angular_y(v.at(4));
-    twist->set_angular_z(v.at(5));
-	pBase->SendTwistCommand(command);
-}
-
-void send_gripper_command(k_api::Base::BaseClient* pBase)
-{
-	// cout << "gripper command: " << cmd << endl;
-	k_api::Base::GripperCommand output;
-	output.set_mode(k_api::Base::GRIPPER_FORCE);
-	auto gripper = output.mutable_gripper();
-	gripper->clear_finger();
-	auto finger = gripper->add_finger();
-	finger->set_finger_identifier(1);
-	finger->set_value(grip * 0.5);
-	output.set_duration(0);    
-	pBase->SendGripperCommand(output);
-	cout << "sending grasp command " << grip << endl;
-	grip *= -1.0;
-}
-
-
-void handle_button(k_api::Base::BaseClient* pBase, int button) 
+void handle_button(int button) 
 {
 	if (button == 1) {
 		quit = true;
 	} else {
-		send_gripper_command(pBase);
+        mode = (mode + 1) % 2;
+        print_mode();
+        switch_count += 1;
 	}
 }
 
 void loop(k_api::Base::BaseClient* pBase)
-// void loop()
 {
 	// Setup SpaceMouse
 	signal(SIGINT, sig);
@@ -139,16 +169,17 @@ void loop(k_api::Base::BaseClient* pBase)
 		exit(0);
 	}
 	quit = false;
-	grip = 1.0;
+	switch_count = 0;
+	mode = 0;
+	old_grasp = 0.0;
+	print_mode();
 	while (!quit) {
 		usleep(1000);
 		spnav_event sev;
 		if (spnav_wait_event(&sev)) {
 			if(sev.type == SPNAV_EVENT_MOTION) {
-				// printf("SAMPLE got motion event: t(%d, %d, %d) ", sev.motion.x, sev.motion.y, sev.motion.z);
-				// printf("r(%d, %d, %d)\n", sev.motion.rx, sev.motion.ry, sev.motion.rz);
 				array<double, 6> new_motion;
-				if (handle_motion(sev.motion, new_motion)) {
+				if (handle_motion(pBase, sev.motion, new_motion)) {
 					old_motion = new_motion;
 					send_twist_command(pBase, new_motion);
 					cout << "SENDING NEW COMMAND: ";
@@ -157,17 +188,13 @@ void loop(k_api::Base::BaseClient* pBase)
 					}
 					cout << endl;
 				} 
-				// else {
-				// 	cout << "SAME" << endl;
-				// }
-				// send_twist_command(pBase, sev.motion);
 			} else if (sev.button.press) {    /* SPNAV_EVENT_BUTTON */
-				// printf("SAMPLE got button %s event b(%d)\n", sev.button.press ? "press" : "release", sev.button.bnum);
-				handle_button(pBase, sev.button.bnum);
+				handle_button(sev.button.bnum);
 			}
 		} 
 	}
 	spnav_close();
+	cout << "TOTAL MODE SWITCHES: " << switch_count << endl;
 }
 
 int main(int argc, char **argv)
@@ -193,28 +220,28 @@ int main(int argc, char **argv)
 	// Create required services
 	auto pBase = new k_api::Base::BaseClient(pRouter);
 
-	// // Move arm to ready position
-	// cout << "Moving the arm to a safe position before executing example\n" << endl;
-	// auto action_type = k_api::Base::RequestedActionType();
-	// action_type.set_action_type(k_api::Base::REACH_JOINT_ANGLES);
-	// auto action_list = pBase->ReadAllActions(action_type);
-	// auto action_handle = k_api::Base::ActionHandle();
-	// action_handle.set_identifier(0); 
-	// for( auto action : action_list.action_list()) {
-	//     if(action.name() == "Home") {
-	//         action_handle = action.handle();
-	//     }
-	// }
+	// Move arm to ready position
+	cout << "Moving the arm to a safe position before executing example\n" << endl;
+	auto action_type = k_api::Base::RequestedActionType();
+	action_type.set_action_type(k_api::Base::REACH_JOINT_ANGLES);
+	auto action_list = pBase->ReadAllActions(action_type);
+	auto action_handle = k_api::Base::ActionHandle();
+	action_handle.set_identifier(0); 
+	for( auto action : action_list.action_list()) {
+	    if(action.name() == "Home") {
+	        action_handle = action.handle();
+	    }
+	}
 
-	// if(action_handle.identifier() == 0) {
-	//     cout << "\nCan't reach safe position. Exiting" << endl;       
-	// } else {
-	//     pBase->ExecuteActionFromReference(action_handle);
-	//     this_thread::sleep_for(chrono::seconds(5)); // Leave time to action to finish
-	// }
+	if(action_handle.identifier() == 0) {
+	    cout << "\nCan't reach safe position. Exiting" << endl;       
+	} else {
+	    pBase->ExecuteActionFromReference(action_handle);
+	    this_thread::sleep_for(chrono::seconds(5)); // Leave time to action to finish
+	}
 	
 	loop(pBase);
-	// loop();
+
 	// Close API session
 	pSessionMng->CloseSession();
 

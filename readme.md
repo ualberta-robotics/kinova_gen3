@@ -12,6 +12,24 @@
 
 <!-- TOC -->
 
+STEP 1
+Install https://github.com/FreeSpacenav
+
+STEP 2
+Install kinova libraries
+
+STEP 3
+clone this rep
+
+STEP 4
+cp kortex_api into kinova_gen3 folder
+
+STEP 5
+
+
+
+
+
 - [Setup (C++ environment)](#setup-example-cpp-environment)
   - [Set up PC environment](#setup-pc-environment)
     - [CMake](#cmake)
