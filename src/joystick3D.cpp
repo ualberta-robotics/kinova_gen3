@@ -144,7 +144,7 @@ void send_gripper_command(k_api::Base::BaseClient* pBase, double val)
 	finger->set_value(val);
 	output.set_duration(0);    
 	pBase->SendGripperCommand(output);
-	cout << "gripper command: " << val << endl;
+	// cout << "gripper command: " << val << endl;
 }
 
 double map_x(double x)
@@ -166,7 +166,7 @@ double map_x(double x)
 	// another dead zone
 	if (ret < 0.05) return 0.0;
 	// round to 2 decimal digits with correct sign
-	return floor((sgn * ret * 100) + .5) / 100;
+	return floor((sgn * ret * 10) + .5) / 10;
 }
 
 bool handle_motion(k_api::Base::BaseClient* pBase, spnav_event_motion motion, array<double, 6> &v)
@@ -192,7 +192,7 @@ bool handle_motion(k_api::Base::BaseClient* pBase, spnav_event_motion motion, ar
 			v = {0, 0, 0, 0, 0, 0};
 			x = map_x((double)motion.z);
 			if (x != old_grasp) {
-				// send_gripper_command(pBase, x);
+				send_gripper_command(pBase, x);
 				old_grasp = x;
 			}
 			break;
@@ -242,11 +242,11 @@ void loop(k_api::Base::BaseClient* pBase)
 				if (handle_motion(pBase, sev.motion, new_motion)) {
 					old_motion = new_motion;
 					// send_twist_command(pBase, new_motion);
-					cout << "motion command: ";
-					for (int i = 0; i < new_motion.size(); ++i) {
-						cout << new_motion.at(i) << " ";
-					}
-					cout << endl;
+					// cout << "motion command: ";
+					// for (int i = 0; i < new_motion.size(); ++i) {
+					// 	cout << new_motion.at(i) << " ";
+					// }
+					// cout << endl;
 				} 
 			} else if (sev.button.press) {    /* SPNAV_EVENT_BUTTON */
 				handle_button(sev.button.bnum);

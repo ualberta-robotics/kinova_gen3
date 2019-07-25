@@ -110,7 +110,7 @@ double map_x(double x)
 	// another dead zone
 	if (ret < 0.05) return 0.0;
 	// round to 2 decimal digits with correct sign
-	return floor((sgn * ret * 100) + .5) / 100;
+	return floor((sgn * ret * 10) + .5) / 10;
 }
 
 bool handle_motion(k_api::Base::BaseClient* pBase, spnav_event_motion motion, array<double, 6> &v)

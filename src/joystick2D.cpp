@@ -75,11 +75,11 @@ void send_twist_command(k_api::Base::BaseClient* pBase, const std::array<float, 
     twist->set_angular_y(cmd.at(4));
     twist->set_angular_z(cmd.at(5));
     pBase->SendTwistCommand(command);
-    std::cout << "SENDING NEW COMMAND: ";
-    for (int i = 0; i < cmd.size(); ++i) {
-        std::cout << cmd.at(i) << " ";
-    }
-    std::cout << std::endl;
+    // std::cout << "SENDING NEW COMMAND: ";
+    // for (int i = 0; i < cmd.size(); ++i) {
+    //     std::cout << cmd.at(i) << " ";
+    // }
+    // std::cout << std::endl;
 }
 
 void send_gripper_command(k_api::Base::BaseClient* pBase, float cmd)

@@ -80,3 +80,20 @@ target_include_directories(${TARGET_EXE_NAME} PRIVATE ${KORTEX_DIR}include/commo
 target_include_directories(${TARGET_EXE_NAME} PRIVATE ${KORTEX_DIR}include/messages)
 target_include_directories(${TARGET_EXE_NAME} PRIVATE ${KORTEX_DIR}include/client_stubs)
 
+set(TARGET_EXE_NAME "ideal_pour")
+add_executable(${TARGET_EXE_NAME} ideal_pour.cpp)
+
+target_compile_options(${TARGET_EXE_NAME} PRIVATE -Wall)
+target_compile_options(${TARGET_EXE_NAME} PRIVATE -Wno-reorder)
+target_compile_features(${TARGET_EXE_NAME} PRIVATE cxx_std_11)
+target_compile_definitions(${TARGET_EXE_NAME} PRIVATE -D_OS_UNIX)
+
+target_link_libraries(${TARGET_EXE_NAME} PRIVATE ${KORTEX_DIR}lib/${CMAKE_BUILD_TYPE}/libKortexApi.a)
+target_link_libraries(${TARGET_EXE_NAME} PRIVATE pthread)
+target_include_directories(${TARGET_EXE_NAME} PRIVATE ${KORTEX_DIR}include)
+target_include_directories(${TARGET_EXE_NAME} PRIVATE ${KORTEX_DIR}include/client)
+target_include_directories(${TARGET_EXE_NAME} PRIVATE ${KORTEX_DIR}include/common)
+target_include_directories(${TARGET_EXE_NAME} PRIVATE ${KORTEX_DIR}include/messages)
+target_include_directories(${TARGET_EXE_NAME} PRIVATE ${KORTEX_DIR}include/client_stubs)
+
+
