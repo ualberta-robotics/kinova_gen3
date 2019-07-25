@@ -27,6 +27,7 @@
 #include <chrono>
 #include <ctime>
 #include <cstddef>         // std::size_t
+#include <thread>         // std::thread
 
 #include <BaseClientRpc.h>
 #include <SessionManager.h>
@@ -82,23 +83,53 @@ void setup_file(char *task, char* participant)
     outfile << "mode\n";
     outfile << "motion force command [linear_x linear_y linear_z angular_x angular_y angular_z]\n";
     outfile << "gripper force command [open/close]\n";
+    outfile << "current pose [x y z theta_x theta_y theta_z]\n";
+    outfile << "current joint angles [j1 j2 j3 j4 j5 j6 j7]\n";
     outfile << "************************************************************************************\n";
     cout << "\nWriting to file: " << fname.substr(found + 1) << endl;
 }
 
-void write_to_file() 
+void write_to_file(k_api::Base::BaseClient* pBase) 
 {
-	// write mode
-	outfile << mode << "\n";
-	// write motion force command
-	for (int i = 0; i < old_motion.size(); ++i) {
-		outfile << old_motion.at(i) << " ";
+	// pBase->GetMeasuredJointSpeeds(); does not work
+	k_api::Base::Pose pose;
+	k_api::Base::Twist twist;
+	k_api::Base::JointAngles ja;
+	while (!quit) {
+		// write mode
+		outfile << mode << "\n";
+		// write motion force command
+		for (int i = 0; i < old_motion.size(); ++i) {
+			outfile << old_motion.at(i) << " ";
+		}
+		outfile << "\n";
+		// write gripper force command
+		outfile << old_grasp << "\n";
+		// grab and write current pose 
+		pose = pBase->GetMeasuredCartesianPose();
+		outfile << pose.x() << " " << pose.y() << " " << pose.z() << " " << pose.theta_x() << " " << pose.theta_y() << " " << pose.theta_z() << "\n"; 
+		// grab and write current joint angles
+		ja = pBase->GetMeasuredJointAngles();
+		for (int i = 0; i < ja.joint_angles_size(); ++i) {
+			outfile << ja.joint_angles(i).value() << " ";
+		}
+		outfile << "\n";
+		// grab and write current joint speeds
+		twist = pBase->GetMeasuredTwist();
+		outfile << twist.linear_x() << " " << twist.linear_y() << " " << twist.linear_z() << " " << twist.angular_x() << " " << twist.angular_y() << " " << twist.angular_z() << "\n"; 
+
+		// cout << "\n";
+		// cout << ja.joint_angles_size() << endl;
+		// separate by a new line
+		outfile << "\n";
 	}
-	outfile << "\n";
-	// write gripper force command
-	outfile << old_grasp << "\n";
-	// separate by a new line
-	outfile << "\n";
+}
+void write_to_screen(k_api::Base::BaseClient* pBase)
+{
+	while (!quit) {
+		k_api::Base::Pose pose = pBase->GetMeasuredCartesianPose();
+		cout << pose.x() << " " << pose.y() << " " << pose.z() << " " << pose.theta_x() << " " << pose.theta_y() << " " << pose.theta_z() << "\n"; 
+	}
 }
 
 void print_mode() 
@@ -130,7 +161,7 @@ void send_twist_command(k_api::Base::BaseClient* pBase, const array<double, 6> &
     twist->set_angular_x(v.at(3));
     twist->set_angular_y(v.at(4));
     twist->set_angular_z(v.at(5));
-	pBase->SendTwistCommand(command);
+	// pBase->SendTwistCommand(command);
 }
 
 void send_gripper_command(k_api::Base::BaseClient* pBase, double val)
@@ -144,7 +175,7 @@ void send_gripper_command(k_api::Base::BaseClient* pBase, double val)
 	finger->set_value(val);
 	output.set_duration(0);    
 	pBase->SendGripperCommand(output);
-	// cout << "gripper command: " << val << endl;
+	cout << "gripper command: " << val << endl;
 }
 
 double map_x(double x)
@@ -236,7 +267,7 @@ void loop(k_api::Base::BaseClient* pBase)
 	while (!quit) {
 		usleep(10000);
 		spnav_event sev;
-		if (spnav_wait_event(&sev)) {
+		if (spnav_poll_event(&sev)) {
 			if(sev.type == SPNAV_EVENT_MOTION) {
 				array<double, 6> new_motion;
 				if (handle_motion(pBase, sev.motion, new_motion)) {
@@ -252,7 +283,8 @@ void loop(k_api::Base::BaseClient* pBase)
 				handle_button(sev.button.bnum);
 			}
 		}
-		write_to_file();
+		// write_to_file();
+		// write_to_screen(pBase);
 	}
 	spnav_close();
 	cout << "TOTAL MODE SWITCHES: " << switch_count << endl;
@@ -305,10 +337,17 @@ int main(int argc, char **argv)
 		cout << "\nTo save data to file call program with args [TASK] [PARTICIPANT]" << endl;
 		cout << "Running without saving data" << endl;
 		loop(pBase);
+		// thread loop_thread(loop, pBase);
+		// loop_thread.detach();
+		// loop(pBase);
 	} else {
 		setup_file(argv[1], argv[2]);
+		thread file_thread(write_to_file, pBase);
 		if (outfile.is_open()) {
-			loop(pBase);
+			thread loop_thread(loop, pBase);
+			loop_thread.detach();
+			file_thread.join();
+			// loop(pBase);
 		}
 		outfile.close();
 	}
