@@ -9,6 +9,18 @@
 * Refer to the LICENSE file for details.
 *
 */
+#include <stdio.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <array>
+#include <cmath>
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+#include <chrono>
+#include <ctime>
+#include <cstddef>         // std::size_t
+#include <thread>         // std::thread
 
 #include <BaseClientRpc.h>
 #include <SessionManager.h>
@@ -22,6 +34,76 @@ namespace k_api = Kinova::Api;
 #define IP_ADDRESS "192.168.1.12"
 #define PORT 10000
 
+ofstream outfile;
+bool quit;
+
+
+void setup_file(char *task, char* participant)
+{
+    string fname = "../sessions/";
+    fname.append(task);
+    // fname.append("3D");
+    fname.append(participant);
+    std::time_t t = std::time(nullptr);
+    char mbstr[100];
+    if (std::strftime(mbstr, sizeof(mbstr), "%y%m%e%H%M", std::localtime(&t))) {
+        fname.append(mbstr);
+    }
+    outfile.open(fname);
+    std::size_t found = fname.find_last_of("/\\");
+    char timestr[100];
+    outfile << "*************************************** INFO ***************************************\n";
+    outfile << "Filename: " << fname.substr(found + 1) << "\n";
+    if (std::strftime(timestr, sizeof(timestr), "%c", std::localtime(&t))) {
+    outfile << "Date: " << timestr << "\n";
+    }
+    outfile << "Task: " << task << "\n";
+    outfile << "Participant: " << participant << "\n";
+    outfile << "************************************** FORMAT **************************************\n";
+    // outfile << "mode\n";
+    // outfile << "motion force command [linear_x linear_y linear_z angular_x angular_y angular_z]\n";
+    // outfile << "gripper force command [open/close]\n";
+    outfile << "current pose [x y z theta_x theta_y theta_z]\n";
+    outfile << "current joint angles [j1 j2 j3 j4 j5 j6 j7]\n";
+    outfile << "************************************************************************************\n";
+    cout << "\nWriting to file: " << fname.substr(found + 1) << endl;
+}
+
+void write_to_file(k_api::Base::BaseClient* pBase) 
+{
+    // pBase->GetMeasuredJointSpeeds(); does not work
+    k_api::Base::Pose pose;
+    k_api::Base::Twist twist;
+    k_api::Base::JointAngles ja;
+    while (!quit) {
+        // write mode
+        // outfile << mode << "\n";
+        // write motion force command
+        // for (int i = 0; i < old_motion.size(); ++i) {
+        //     outfile << old_motion.at(i) << " ";
+        // }
+        // outfile << "\n";
+        // write gripper force command
+        // outfile << old_grasp << "\n";
+        // grab and write current pose 
+        pose = pBase->GetMeasuredCartesianPose();
+        outfile << pose.x() << " " << pose.y() << " " << pose.z() << " " << pose.theta_x() << " " << pose.theta_y() << " " << pose.theta_z() << "\n"; 
+        // grab and write current joint angles
+        ja = pBase->GetMeasuredJointAngles();
+        for (int i = 0; i < ja.joint_angles_size(); ++i) {
+            outfile << ja.joint_angles(i).value() << " ";
+        }
+        outfile << "\n";
+        // grab and write current joint speeds
+        // twist = pBase->GetMeasuredTwist();
+        // outfile << twist.linear_x() << " " << twist.linear_y() << " " << twist.linear_z() << " " << twist.angular_x() << " " << twist.angular_y() << " " << twist.angular_z() << "\n"; 
+
+        // cout << "\n";
+        // cout << ja.joint_angles_size() << endl;
+        // separate by a new line
+        outfile << "\n";
+    }
+}
 
 void createAngularAction(k_api::Base::Action* action, std::vector<float> &angles)
 {
@@ -186,27 +268,8 @@ void send_pose_command(k_api::Base::BaseClient* base, std::array<float, 6> &targ
     std::this_thread::sleep_for(std::chrono::milliseconds(20000)); 
 }
 
-int main(int argc, char **argv)
+void pour(k_api::Base::BaseClient* pBase)
 {
-    // Setup API
-    auto pTransport = new k_api::TransportClientUdp();
-    auto pRouter = new k_api::RouterClient(pTransport, [](k_api::KError err){ std::cout << "_________ callback error _________" << err.toString(); });
-    pTransport->connect(IP_ADDRESS, PORT);
-
-    // Create session
-    auto createSessionInfo = k_api::Session::CreateSessionInfo();
-    createSessionInfo.set_username("iris");
-    createSessionInfo.set_password("IRIS");
-    createSessionInfo.set_session_inactivity_timeout(60000);   // (milliseconds)
-    createSessionInfo.set_connection_inactivity_timeout(2000); // (milliseconds)
-
-    std::cout << "\nCreating session for communication" << std::endl;
-    auto pSessionMng = new k_api::SessionManager(pRouter);
-    pSessionMng->CreateSession(createSessionInfo);
-    std::cout << "Session created" << std::endl;
-
-    // Create required services
-    auto pBase = new k_api::Base::BaseClient(pRouter);
 
     std::cout << "Moving to start position..." << std::endl;
     std::vector<float> angles = {0.107f, 300.742f, 178.776f, 216.905f, 12.912f, 355.898f, 77.038f}; // START POSITION
@@ -246,6 +309,89 @@ int main(int argc, char **argv)
     std::cout << "Moving to start position..." << std::endl;
     angles = {0.107f, 300.742f, 178.776f, 216.905f, 12.912f, 355.898f, 77.038f}; // START POSITION
     send_joint_angle_command(pBase, angles, 7000);
+    quit = true;
+    return
+}
+
+int main(int argc, char **argv)
+{
+    // Setup API
+    auto pTransport = new k_api::TransportClientUdp();
+    auto pRouter = new k_api::RouterClient(pTransport, [](k_api::KError err){ std::cout << "_________ callback error _________" << err.toString(); });
+    pTransport->connect(IP_ADDRESS, PORT);
+
+    // Create session
+    auto createSessionInfo = k_api::Session::CreateSessionInfo();
+    createSessionInfo.set_username("iris");
+    createSessionInfo.set_password("IRIS");
+    createSessionInfo.set_session_inactivity_timeout(60000);   // (milliseconds)
+    createSessionInfo.set_connection_inactivity_timeout(2000); // (milliseconds)
+
+    std::cout << "\nCreating session for communication" << std::endl;
+    auto pSessionMng = new k_api::SessionManager(pRouter);
+    pSessionMng->CreateSession(createSessionInfo);
+    std::cout << "Session created" << std::endl;
+
+    // Create required services
+    auto pBase = new k_api::Base::BaseClient(pRouter);
+    quit = false;
+    if (argc <= 2) {
+        cout << "\nTo save data to file call program with args [TASK] [PARTICIPANT]" << endl;
+        cout << "Running without saving data" << endl;
+        // loop(pBase);
+        // thread loop_thread(loop, pBase);
+        // loop_thread.detach();
+        pour(pBase);
+    } else {
+        setup_file(argv[1], argv[2]);
+        thread file_thread(write_to_file, pBase);
+        if (outfile.is_open()) {
+            thread loop_thread(pour, pBase);
+            loop_thread.detach();
+            file_thread.join();
+            // loop(pBase);
+        }
+        outfile.close();
+    }
+
+    // std::cout << "Moving to start position..." << std::endl;
+    // std::vector<float> angles = {0.107f, 300.742f, 178.776f, 216.905f, 12.912f, 355.898f, 77.038f}; // START POSITION
+    // send_joint_angle_command(pBase, angles, 7000);
+
+    // std::cout << "Moving to pickup position..." << std::endl;
+    // angles = {104.13f, 287.682f, 97.899f, 247.06f, 355.234f, 343.534f, 26.965f}; // PICKUP
+    // send_joint_angle_command(pBase, angles, 7000);
+
+    // std::cout << "Closing gripper..." << std::endl;
+    // send_gripper_command(pBase, -1);
+    // std::this_thread::sleep_for(std::chrono::milliseconds(3000)); 
+
+    // std::cout << "Moving to pouring position..." << std::endl;    
+    // angles = {78.0f, 355.0f, 123.0f, 233.0f, 351.0f, 23.0f, 82.0f}; // GET READY TO POUR
+    // // angles = {78.932f, 1.369f, 127.485f, 243.213f, 8.213f, 4.232f, 83.745f}; // GET READY TO POUR
+    // send_joint_angle_command(pBase, angles, 7000);
+
+    // std::cout << "Pouring..." << std::endl;    
+    // angles = {159.724f, 0.671f, 51.111f, 250.119f, 0.444f, 357.351f, 309.919f}; // POUR
+    // // angles = {140.812f, 354.46f, 69.739f, 253.373f, 349.95f, 356.267f, 314.938f}; // POUR
+    // // // angles = {79.016f, 3.616f, 128.657f, 244.089f, 7.935f, 7.904f, 300.779f}; // POUR
+    // send_joint_angle_command(pBase, angles, 12000);
+
+    // angles = {78.0f, 355.0f, 123.0f, 233.0f, 351.0f, 23.0f, 82.0f}; // GET READY TO POUR
+    // // angles = {78.932f, 1.369f, 127.485f, 243.213f, 8.213f, 4.232f, 83.745f}; // GET READY TO POUR
+    // send_joint_angle_command(pBase, angles, 7000);
+
+    // std::cout << "Putting bottle back..." << std::endl;    
+    // angles = {104.13f, 287.682f, 97.899f, 247.06f, 355.234f, 343.534f, 26.965f}; // PICKUP
+    // send_joint_angle_command(pBase, angles, 4000);
+
+    // std::cout << "Opening gripper..." << std::endl;
+    // send_gripper_command(pBase, 1);    
+    // std::this_thread::sleep_for(std::chrono::milliseconds(3000)); 
+
+    // std::cout << "Moving to start position..." << std::endl;
+    // angles = {0.107f, 300.742f, 178.776f, 216.905f, 12.912f, 355.898f, 77.038f}; // START POSITION
+    // send_joint_angle_command(pBase, angles, 7000);
 
     // std::cout << "\nMoving the arm to a safe position before executing example" << std::endl;
     // auto action_type = k_api::Base::RequestedActionType();

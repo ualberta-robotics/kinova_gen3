@@ -124,6 +124,7 @@ void write_to_file(k_api::Base::BaseClient* pBase)
 		outfile << "\n";
 	}
 }
+
 void write_to_screen(k_api::Base::BaseClient* pBase)
 {
 	while (!quit) {
