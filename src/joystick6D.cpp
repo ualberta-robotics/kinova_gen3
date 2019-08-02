@@ -16,31 +16,31 @@
 */
 
 #include "spnavkinova.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <signal.h>
-#include <array>
-#include <cmath>
+#include "experimental_utilities.h"
+
+#include "gen3_utilities.h"
+#include "gen3_commands.h"
+// #include <stdio.h>
+// #include <stdlib.h>
+// #include <signal.h>
+// #include <array>
+// #include <cmath>
 
 #include <BaseClientRpc.h>
 #include <SessionManager.h>
 #include <RouterClient.h>
 #include <TransportClientUdp.h>
 
-using namespace std;
+// using namespace std;
 
-namespace k_api = Kinova::Api;
+// namespace k_api = Kinova::Api;
 
-#define IP_ADDRESS "192.168.1.12"
-#define PORT 10000
+// #define IP_ADDRESS "192.168.1.12"
+// #define PORT 10000
 #define MODE_MOTION 0 // Motion Mode
 #define MODE_FINGER 1 // Finger Mode
 
-array<double, 6> old_motion;
-double old_grasp;
-int mode;
-int switch_count;
-bool quit;
+// int switch_count;
 
 void sig(int s)
 {
@@ -60,35 +60,6 @@ void print_mode()
         default:
             break;
     }
-}
-
-void send_twist_command(k_api::Base::BaseClient* pBase, const array<double, 6> &v)
-{
-	auto command = k_api::Base::TwistCommand();
-	command.set_mode(k_api::Base::UNSPECIFIED_TWIST_MODE);
-	command.set_duration(1);  // set to 0 for unlimited time to execute
-	auto twist = command.mutable_twist();
-    twist->set_linear_x(v.at(0));
-    twist->set_linear_y(v.at(1));
-    twist->set_linear_z(v.at(2));
-    twist->set_angular_x(v.at(3));
-    twist->set_angular_y(v.at(4));
-    twist->set_angular_z(v.at(5));
-	pBase->SendTwistCommand(command);
-}
-
-void send_gripper_command(k_api::Base::BaseClient* pBase, double val)
-{
-	k_api::Base::GripperCommand output;
-	output.set_mode(k_api::Base::GRIPPER_FORCE);
-	auto gripper = output.mutable_gripper();
-	gripper->clear_finger();
-	auto finger = gripper->add_finger();
-	finger->set_finger_identifier(1);
-	finger->set_value(val);
-	output.set_duration(0);    
-	pBase->SendGripperCommand(output);
-	cout << "sending grasp command " << val << endl;
 }
 
 double map_x(double x)
@@ -115,25 +86,16 @@ double map_x(double x)
 
 bool handle_motion(k_api::Base::BaseClient* pBase, spnav_event_motion motion, array<double, 6> &v)
 {   
-	/*******************************************************************************
-	* values are mapped wrong in spnav library
-	* linear x = motion.z
-	* linear y = -motion.x
-	* linear z = motion.y
-	* angular x = motion.rz
-	* angular y = -motion.rx
-	* angular z = motion.ry 
-	*******************************************************************************/
 	double x;
 	switch (mode) {
 		case MODE_MOTION:
-			v = {motion.z, -motion.x, motion.y, -motion.rx, motion.rz, -motion.ry};
-			for (int i = 0; i < v.size(); ++i) {
+			v = {(double)motion.z, (double)-motion.x, (double)motion.y, (double)-motion.rx, (double)motion.rz, (double)-motion.ry};
+			for (int i = 0; i < (int)v.size(); ++i) {
 				v.at(i) = map_x((double)v.at(i));
 			}
 			break;
 		case MODE_FINGER:
-			v = {0, 0, 0, 0, 0, 0};
+			v = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 			x = map_x((double)motion.z);
 			if (x != old_grasp) {
 				send_gripper_command(pBase, x);
@@ -181,12 +143,12 @@ void loop(k_api::Base::BaseClient* pBase)
 				array<double, 6> new_motion;
 				if (handle_motion(pBase, sev.motion, new_motion)) {
 					old_motion = new_motion;
-					send_twist_command(pBase, new_motion);
-					cout << "SENDING NEW COMMAND: ";
-					for (int i = 0; i < new_motion.size(); ++i) {
-						cout << new_motion.at(i) << " ";
-					}
-					cout << endl;
+					send_twist_command(pBase, new_motion, 1);
+					// cout << "SENDING NEW COMMAND: ";
+					// for (int i = 0; i < new_motion.size(); ++i) {
+					// 	cout << new_motion.at(i) << " ";
+					// }
+					// cout << endl;
 				} 
 			} else if (sev.button.press) {    /* SPNAV_EVENT_BUTTON */
 				handle_button(sev.button.bnum);
@@ -195,6 +157,7 @@ void loop(k_api::Base::BaseClient* pBase)
 	}
 	spnav_close();
 	cout << "TOTAL MODE SWITCHES: " << switch_count << endl;
+	outfile << "TOTAL MODE SWITCHES: " << switch_count << endl;
 }
 
 int main(int argc, char **argv)
@@ -204,51 +167,49 @@ int main(int argc, char **argv)
 	auto pTransport = new k_api::TransportClientUdp();
 	auto pRouter = new k_api::RouterClient(pTransport, errorCallback);
 	pTransport->connect(IP_ADDRESS, PORT);
-
 	// Create session
 	auto createSessionInfo = k_api::Session::CreateSessionInfo();
 	createSessionInfo.set_username("iris");
 	createSessionInfo.set_password("IRIS");
 	createSessionInfo.set_session_inactivity_timeout(60000);   // (milliseconds)
 	createSessionInfo.set_connection_inactivity_timeout(2000); // (milliseconds)
-
 	cout << "\nCreating session for communication" << endl;
 	auto pSessionMng = new k_api::SessionManager(pRouter);
 	pSessionMng->CreateSession(createSessionInfo);
-	cout << "Session created" << endl;
-
+	cout << "Session created\n" << endl;
 	// Create required services
 	auto pBase = new k_api::Base::BaseClient(pRouter);
+    // if (!send_safe_position_command(pBase)) return 0;
+	send_joint_angle_command(pBase, start_position_angles, 7000);
+	time_t start, end; 
 
-	// Move arm to ready position
-	cout << "Moving the arm to a safe position before executing example\n" << endl;
-	auto action_type = k_api::Base::RequestedActionType();
-	action_type.set_action_type(k_api::Base::REACH_JOINT_ANGLES);
-	auto action_list = pBase->ReadAllActions(action_type);
-	auto action_handle = k_api::Base::ActionHandle();
-	action_handle.set_identifier(0); 
-	for( auto action : action_list.action_list()) {
-	    if(action.name() == "Home") {
-	        action_handle = action.handle();
-	    }
-	}
-
-	if(action_handle.identifier() == 0) {
-	    cout << "\nCan't reach safe position. Exiting" << endl;       
+    // Setup outfile if required and run program
+	if (argc <= 2) {
+		cout << "\nTo save data to file call program with args [TASK] [PARTICIPANT]" << endl;
+		cout << "Running without saving data" << endl;
+		loop(pBase);
 	} else {
-	    pBase->ExecuteActionFromReference(action_handle);
-	    this_thread::sleep_for(chrono::seconds(5)); // Leave time to action to finish
+		if (argc == 4) setup_file(argv[1], argv[2], "6D_", true);
+		else setup_file(argv[1], argv[2], "6D_");
+		thread file_thread(write_to_file, pBase, true);
+		if (outfile.is_open()) {
+			time(&start);
+		    ios_base::sync_with_stdio(false); 
+			thread loop_thread(loop, pBase);
+			loop_thread.detach();
+			file_thread.join();
+			time(&end); 
+		    double time_taken = double(end - start); 
+			cout << "TOTAL EXECUTION TIME: " << time_taken << " SECONDS" << endl;
+			outfile << "TOTAL EXECUTION TIME: " << time_taken << " SECONDS" << endl;
+		}
+		outfile.close();
 	}
-	
-	loop(pBase);
-
 	// Close API session
 	pSessionMng->CloseSession();
-
 	// Deactivate the router and cleanly disconnect from the transport object
 	pRouter->SetActivationStatus(false);
 	pTransport->disconnect();
-
 	// Destroy the API
 	delete pBase;
 	delete pSessionMng;

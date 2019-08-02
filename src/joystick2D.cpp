@@ -16,6 +16,11 @@
 */
 
 #include "joystick2d.hh"
+#include "experimental_utilities.h"
+
+#include "gen3_utilities.h"
+#include "gen3_commands.h"
+
 #include <unistd.h>
 #include <array>
 
@@ -24,26 +29,24 @@
 #include <RouterClient.h>
 #include <TransportClientUdp.h>
 
-namespace k_api = Kinova::Api;
+// namespace k_api = Kinova::Api;
 
-#define IP_ADDRESS "192.168.1.12"
-#define PORT 10000
+// #define IP_ADDRESS "192.168.1.12"
+// #define PORT 10000
 #define AXISVALUE -32767
 #define MODE_XY 0 // Translation-X and Translation-Y
 #define MODE_ZR 1 // Translation-Z and Wrist Rotation
 #define MODE_WO 2 // Wrist Orientation
 #define MODE_FM 3 // Finger Mode
 #define BUTTON_BLUE 0
-#define BUTTON_RED 1
+#define BUTTON_RED 2
 
 const float GAINS = 0.5;
-int mode;
-int switch_count;
-bool quit;
+// int switch_count;
 
 void print_mode() 
 {
-    switch(mode) {
+    switch (mode) {
         case MODE_XY:
             std::cout << "\nTranslation-X and Translation-Y Mode" << std::endl;
             break;
@@ -61,43 +64,9 @@ void print_mode()
     }
 }
 
-void send_twist_command(k_api::Base::BaseClient* pBase, const std::array<float, 6> &cmd)
+void move_axis(k_api::Base::BaseClient* pBase, int axis, double direction)
 {
-    auto command = k_api::Base::TwistCommand();
-    command.set_mode(k_api::Base::UNSPECIFIED_TWIST_MODE);
-    command.set_duration(0);  // Unlimited time to execute
-
-    auto twist = command.mutable_twist();
-    twist->set_linear_x(cmd.at(0));
-    twist->set_linear_y(cmd.at(1));
-    twist->set_linear_z(cmd.at(2));
-    twist->set_angular_x(cmd.at(3));
-    twist->set_angular_y(cmd.at(4));
-    twist->set_angular_z(cmd.at(5));
-    pBase->SendTwistCommand(command);
-    // std::cout << "SENDING NEW COMMAND: ";
-    // for (int i = 0; i < cmd.size(); ++i) {
-    //     std::cout << cmd.at(i) << " ";
-    // }
-    // std::cout << std::endl;
-}
-
-void send_gripper_command(k_api::Base::BaseClient* pBase, float cmd)
-{
-    k_api::Base::GripperCommand output;
-    output.set_mode(k_api::Base::GRIPPER_FORCE);
-    auto gripper = output.mutable_gripper();
-    gripper->clear_finger();
-    auto finger = gripper->add_finger();
-    finger->set_finger_identifier(1);
-    finger->set_value(cmd * 0.5);
-    output.set_duration(0);    
-    pBase->SendGripperCommand(output);
-}
-
-void move_axis(k_api::Base::BaseClient* pBase, int axis, float direction)
-{
-    std::array<float, 6> command;
+    std::array<double, 6> command = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     switch(mode) {
         case MODE_XY:
             if (axis == 1) {
@@ -128,7 +97,7 @@ void move_axis(k_api::Base::BaseClient* pBase, int axis, float direction)
         default:
             break;
     }
-    send_twist_command(pBase, command);
+    send_twist_command(pBase, command, 0);
 }
 
 void handle_button(int button) 
@@ -172,6 +141,7 @@ void loop(k_api::Base::BaseClient* pBase)
         }
     }
     std::cout << "TOTAL MODE SWITCHES: " << switch_count << std::endl;
+    outfile << "TOTAL MODE SWITCHES: " << switch_count << endl;
 }
 
 int main(int argc, char **argv)
@@ -181,54 +151,52 @@ int main(int argc, char **argv)
     auto pTransport = new k_api::TransportClientUdp();
     auto pRouter = new k_api::RouterClient(pTransport, errorCallback);
     pTransport->connect(IP_ADDRESS, PORT);
-
     // Create session
     auto createSessionInfo = k_api::Session::CreateSessionInfo();
     createSessionInfo.set_username("iris");
     createSessionInfo.set_password("IRIS");
     createSessionInfo.set_session_inactivity_timeout(60000);   // (milliseconds)
     createSessionInfo.set_connection_inactivity_timeout(2000); // (milliseconds)
-
     std::cout << "\nCreating session for communication" << std::endl;
     auto pSessionMng = new k_api::SessionManager(pRouter);
     pSessionMng->CreateSession(createSessionInfo);
-    std::cout << "Session created" << std::endl;
-
+    std::cout << "Session created\n" << std::endl;
     // Create required services
     auto pBase = new k_api::Base::BaseClient(pRouter);
-
-    // // Move arm to ready position
-    std::cout << "Moving the arm to a safe position before executing example\n" << std::endl;
-    auto action_type = k_api::Base::RequestedActionType();
-    action_type.set_action_type(k_api::Base::REACH_JOINT_ANGLES);
-    auto action_list = pBase->ReadAllActions(action_type);
-    auto action_handle = k_api::Base::ActionHandle();
-    action_handle.set_identifier(0); 
-    for( auto action : action_list.action_list()) {
-        if(action.name() == "Home") {
-            action_handle = action.handle();
-        }
-    }
-
-    if(action_handle.identifier() == 0) {
-        std::cout << "\nCan't reach safe position. Exiting" << std::endl;       
+    send_joint_angle_command(pBase, start_position_angles, 7000);
+    time_t start, end; 
+    // if (!send_safe_position_command(pBase)) return 0;
+    // Setup outfile if required and run program
+    if (argc <= 2) {
+        cout << "\nTo save data to file call program with args [TASK] [PARTICIPANT]" << endl;
+        cout << "Running without saving data" << endl;
+        loop(pBase);
     } else {
-        pBase->ExecuteActionFromReference(action_handle);
-        std::this_thread::sleep_for(std::chrono::seconds(5)); // Leave time to action to finish
+        if (argc == 4) setup_file(argv[1], argv[2], "2D_", true); // debug - also prints to screen
+        else setup_file(argv[1], argv[2], "2D_");
+        thread file_thread(write_to_file, pBase, true);
+        if (outfile.is_open()) {
+            time(&start);
+            ios_base::sync_with_stdio(false); 
+            thread loop_thread(loop, pBase);
+            loop_thread.detach();
+            file_thread.join();
+            time(&end); 
+            double time_taken = double(end - start); 
+            cout << "TOTAL EXECUTION TIME: " << time_taken << " SECONDS" << endl;
+            outfile << "TOTAL EXECUTION TIME: " << time_taken << " SECONDS" << endl;
+        }
+        outfile.close();
     }
-    
-    loop(pBase);
-
     // Close API session
     pSessionMng->CloseSession();
-
     // Deactivate the router and cleanly disconnect from the transport object
     pRouter->SetActivationStatus(false);
     pTransport->disconnect();
-
     // Destroy the API
     delete pBase;
     delete pSessionMng;
     delete pRouter;
     delete pTransport;
+    return 0;
 };

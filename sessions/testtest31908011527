@@ -1,0 +1,13 @@
+*************************************** INFO ***************************************
+Filename: testtest31908011527
+Date: Thu Aug  1 15:27:20 2019
+Task: test
+Participant: test
+************************************** FORMAT **************************************
+mode
+motion force command [linear_x linear_y linear_z angular_x angular_y angular_z]
+gripper force command [open/close]
+current pose [x y z theta_x theta_y theta_z]
+current joint angles [j1 j2 j3 j4 j5 j6 j7]
+************************************************************************************
+TOTAL EXECUTION TIME: 0 SECONDS
