@@ -13,7 +13,7 @@
 // Copyright Drew Noakes 2013-2016
 // https://github.com/drewnoakes/joystick
 
-#include "joystick2d.hh"
+#include "joystickBox.hh"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -23,35 +23,35 @@
 #include <sstream>
 #include "unistd.h"
 
-Joystick2D::Joystick2D()
+JoystickBox::JoystickBox()
 {
 	openPath("/dev/input/js0");
 }
 
-Joystick2D::Joystick2D(int joystickNumber)
+JoystickBox::JoystickBox(int joystickNumber)
 {
 	std::stringstream sstm;
 	sstm << "/dev/input/js" << joystickNumber;
 	openPath(sstm.str());
 }
 
-Joystick2D::Joystick2D(std::string devicePath)
+JoystickBox::JoystickBox(std::string devicePath)
 {
 	openPath(devicePath);
 }
 
-Joystick2D::Joystick2D(std::string devicePath, bool blocking)
+JoystickBox::JoystickBox(std::string devicePath, bool blocking)
 {
 	openPath(devicePath, blocking);
 }
 
-void Joystick2D::openPath(std::string devicePath, bool blocking)
+void JoystickBox::openPath(std::string devicePath, bool blocking)
 {
 	// Open the device using either blocking or non-blocking
 	_fd = open(devicePath.c_str(), blocking ? O_RDONLY : O_RDONLY | O_NONBLOCK);
 }
 
-bool Joystick2D::sample(Joystick2DEvent* event)
+bool JoystickBox::sample(JoystickBoxEvent* event)
 {
 	int bytes = read(_fd, event, sizeof(*event)); 
 
@@ -63,17 +63,17 @@ bool Joystick2D::sample(Joystick2DEvent* event)
 	return bytes == sizeof(*event);
 }
 
-bool Joystick2D::isFound()
+bool JoystickBox::isFound()
 {
 	return _fd >= 0;
 }
 
-Joystick2D::~Joystick2D()
+JoystickBox::~JoystickBox()
 {
 	close(_fd);
 }
 
-std::ostream& operator<<(std::ostream& os, const Joystick2DEvent& e)
+std::ostream& operator<<(std::ostream& os, const JoystickBoxEvent& e)
 {
 	os << "type=" << static_cast<int>(e.type)
 		 << " number=" << static_cast<int>(e.number)

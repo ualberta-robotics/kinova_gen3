@@ -163,7 +163,7 @@ class ExperimentalUtilities {
 	{
 		time(&start_time);
 	    ios_base::sync_with_stdio(false); 
-	    cout << "Starting timer..." << endl;
+	    cout << "\nStarting timer..." << endl;
 	}
 
 	void stop_timer()

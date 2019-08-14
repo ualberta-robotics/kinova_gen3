@@ -15,134 +15,174 @@
 * Date: July 19, 2019
 */
 
-#include "joystick2d.hh"
+#include "joystickBox.hh"
 #include "experimental_utilities.h"
-
-#include "gen3_utilities.h"
 #include "gen3_commands.h"
 
-#include <unistd.h>
-#include <array>
-
-#include <BaseClientRpc.h>
-#include <SessionManager.h>
-#include <RouterClient.h>
-#include <TransportClientUdp.h>
-
-// namespace k_api = Kinova::Api;
-
-// #define IP_ADDRESS "192.168.1.12"
-// #define PORT 10000
 #define AXISVALUE -32767
-#define MODE_XY 0 // Translation-X and Translation-Y
-#define MODE_ZR 1 // Translation-Z and Wrist Rotation
-#define MODE_WO 2 // Wrist Orientation
-#define MODE_FM 3 // Finger Mode
+#define MODE_TRANSX_TRANSY 0 // Translation-X and Translation-Y
+#define MODE_TRANSZ_ORNT 1 // Translation-Z and Wrist Orientation
+#define MODE_ORTN 2 // Wrist Orientation
+#define MODE_GRIPPER 3 // Finger Mode
 #define BUTTON_BLUE 0
 #define BUTTON_RED 2
 
 const float GAINS = 0.5;
-// int switch_count;
 
-void print_mode() 
-{
-    switch (mode) {
-        case MODE_XY:
-            std::cout << "\nTranslation-X and Translation-Y Mode" << std::endl;
-            break;
-        case MODE_ZR:
-            std::cout << "\nTranslation-Z and Wrist Rotation Mode" << std::endl;
-            break;
-        case MODE_WO:
-            std::cout << "\nWrist Orientation Mode" << std::endl;
-            break;
-        case MODE_FM:
-            std::cout << "\nFinger Mode" << std::endl;
-            break;
-        default:
-            break;
-    }
-}
+class Joystick2D {
+protected:
+    ExperimentalUtilities * util_ptr;
+    bool quit;
+    int mode;
+    int count;
+    double gripper;
+    array<double, 6> motion;
 
-void move_axis(k_api::Base::BaseClient* pBase, int axis, double direction)
-{
-    std::array<double, 6> command = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-    switch(mode) {
-        case MODE_XY:
-            if (axis == 1) {
-                command = {GAINS * direction, 0.0, 0.0, 0.0, 0.0, 0.0};
-            } else if (axis == 0) {
-                command = {0.0, GAINS * direction, 0.0, 0.0, 0.0, 0.0};                
-            }
-            break;
-        case MODE_ZR:
-            if (axis == 1) {
-                command = {0.0, 0.0, GAINS * direction, 0.0, 0.0, 0.0};
-            } else if (axis == 0) {
-                command = {0.0, 0.0, 0.0, 0.0, 0.0, -GAINS * direction};                
-            }            
-            break;
-        case MODE_WO:
-            if (axis == 1) {
-                command = {0.0, 0.0, 0.0, GAINS * direction, 0.0, 0.0};
-            } else if (axis == 0) {
-                command = {0.0, 0.0, 0.0, 0.0, GAINS * direction, 0.0};                
-            } 
-            break;
-        case MODE_FM:
-            if (axis == 1) {
-                send_gripper_command(pBase, direction);
-            }
-            return;
-        default:
-            break;
-    }
-    send_twist_command(pBase, command, 0);
-}
+public:
+Joystick2D (ExperimentalUtilities * util_ptr_) : 
+        util_ptr(util_ptr_),
+        quit(false),
+        mode(0),
+        gripper(0.0),
+        motion({0,0,0,0,0,0}),
+        count(0)
+    {}
 
-void handle_button(int button) 
-{
-    switch (button) {
-        case BUTTON_BLUE:
-            mode = (mode + 1) % 4;
-            print_mode();
-            switch_count += 1;
-            break;
-        case BUTTON_RED:
-            quit = true;
-            break;
-        default:
-            break;
+    ~Joystick2D() 
+    {
+        util_ptr->set_quit(true);
     }
-}
 
-void loop(k_api::Base::BaseClient* pBase)
-{
-    // Setup Joystick
-    Joystick2D joystick("/dev/input/js0");
-    if (!joystick.isFound()) {
-        printf("open failed.\n");
-        exit(1);
-    }
-    quit = false;
-    mode = 0;
-    switch_count = 0;
-    print_mode();
-    int joystick_initialized = 0;
-    while (!quit) {
-        usleep(1000);
-        Joystick2DEvent event;
-        if (joystick.sample(&event) && joystick_initialized++ > 18){
-            if (event.isButton() && event.value == 1) {
-                handle_button(event.number);
-            } else if (event.isAxis()) {
-                move_axis(pBase, event.number, event.value / AXISVALUE);
-            }
+    void print_mode() 
+    {
+        switch (mode) {
+            case MODE_TRANSX_TRANSY:
+                std::cout << "\nTranslation-X and Translation-Y Mode" << std::endl;
+                break;
+            case MODE_TRANSZ_ORNT:
+                std::cout << "\nTranslation-Z and Wrist Rotation Mode" << std::endl;
+                break;
+            case MODE_ORTN:
+                std::cout << "\nWrist Orientation Mode" << std::endl;
+                break;
+            case MODE_GRIPPER:
+                std::cout << "\nGripper Mode" << std::endl;
+                break;
+            default:
+                break;
         }
     }
-    std::cout << "TOTAL MODE SWITCHES: " << switch_count << std::endl;
-    outfile << "TOTAL MODE SWITCHES: " << switch_count << endl;
-}
+
+    double map_x(double x)
+    {
+        double sgn;
+        double ret;
+        double a = 0.0;
+        double b = 250.0;
+        double c = 0.0;
+        double d = 0.5;
+        // save sign for later use
+        if (x > 0)  sgn = 1.0;
+        else sgn = -1.0;
+        // find dead zone
+        if (abs(x) < 100) return 0.0;
+        else x -= (sgn * 100);
+        // calculate mapped return value [a, b] -> [c, d]
+        ret = (abs(x) - a) * ((d - c) / (b - a)) + c;
+        // another dead zone
+        if (ret < 0.1) return 0.0;
+        // round to 2 decimal digits with correct sign
+        return floor((sgn * ret * 10) + .5) / 10;
+    }
+
+    bool handle_motion(k_api::Base::BaseClient* pBase, int axis, double direction, array<double, 6> &v)
+    {   
+        bool ret_val = true;
+        switch(mode) {
+            case MODE_TRANSX_TRANSY:
+                if (axis == 1) {
+                    v = {GAINS * direction, 0.0, 0.0, 0.0, 0.0, 0.0};
+                } else if (axis == 0) {
+                    v = {0.0, GAINS * direction, 0.0, 0.0, 0.0, 0.0};                
+                }
+                break;
+            case MODE_TRANSZ_ORNT:
+                if (axis == 1) {
+                    v = {0.0, 0.0, GAINS * direction, 0.0, 0.0, 0.0};
+                } else if (axis == 0) {
+                    v = {0.0, 0.0, 0.0, 0.0, 0.0, -GAINS * direction};                
+                }            
+                break;
+            case MODE_ORTN:
+                if (axis == 1) {
+                    v = {0.0, 0.0, 0.0, GAINS * direction, 0.0, 0.0};
+                } else if (axis == 0) {
+                    v = {0.0, 0.0, 0.0, 0.0, GAINS * direction, 0.0};                
+                } 
+                break;
+            case MODE_GRIPPER:
+                if (axis == 1 && direction != gripper) {
+                    util_ptr->set_gripper_value(direction);
+                    send_gripper_command(pBase, direction);
+                    gripper = direction;
+                }
+                ret_val = false;
+                break;
+            default:
+                ret_val = false;
+                break;
+        }
+        return ret_val;
+    }
+
+    void handle_button(int button) 
+    {
+        switch (button) {
+            case BUTTON_BLUE:
+                mode = (mode + 1) % 4;
+                util_ptr->set_mode(mode);
+                print_mode();
+                count += 1;
+                break;
+            case BUTTON_RED:
+                quit = true;
+                util_ptr->set_quit(quit);
+                break;
+            default:
+                break;
+        }
+    }
+
+    void loop(k_api::Base::BaseClient* pBase)
+    {
+        util_ptr->start_timer();
+        JoystickBox joystick("/dev/input/js0");
+        if (!joystick.isFound()) {
+            printf("open failed.\n");
+            exit(1);
+        }
+        print_mode();
+        int joystick_initialized = 0;
+        while (!quit) {
+            usleep(1000);
+            JoystickBoxEvent event;
+            if (joystick.sample(&event) && joystick_initialized++ > 18){
+                if (event.isAxis()) {
+                    array<double, 6> new_motion;
+                    if (handle_motion(pBase, event.number, event.value / AXISVALUE, new_motion)) {
+                        util_ptr->set_motion_value(new_motion);
+                        send_twist_command(pBase, new_motion, 0);
+                        motion = new_motion;
+                    }
+                } else if (event.isButton() && event.value == 1) {
+                    handle_button(event.number);
+                }
+            }
+        }
+        util_ptr->stop_timer();
+        util_ptr->write_mode_count(count);
+    }
+};
 
 int main(int argc, char **argv)
 {
@@ -164,29 +204,22 @@ int main(int argc, char **argv)
     // Create required services
     auto pBase = new k_api::Base::BaseClient(pRouter);
     send_joint_angle_command(pBase, start_position_angles, 7000);
-    time_t start, end; 
-    // if (!send_safe_position_command(pBase)) return 0;
     // Setup outfile if required and run program
     if (argc <= 2) {
+        ExperimentalUtilities * eu_ptr = new ExperimentalUtilities(2, "", "");
         cout << "\nTo save data to file call program with args [TASK] [PARTICIPANT]" << endl;
         cout << "Running without saving data" << endl;
-        loop(pBase);
+        Joystick2D * joystick_ptr = new Joystick2D(eu_ptr);
+        joystick_ptr->loop(pBase);
     } else {
-        if (argc == 4) setup_file(argv[1], argv[2], "2D_", true); // debug - also prints to screen
-        else setup_file(argv[1], argv[2], "2D_");
-        thread file_thread(write_to_file, pBase, true);
-        if (outfile.is_open()) {
-            time(&start);
-            ios_base::sync_with_stdio(false); 
-            thread loop_thread(loop, pBase);
+        ExperimentalUtilities * eu_ptr = new ExperimentalUtilities(2, string(argv[1]), string(argv[2]));
+        Joystick2D * joystick_ptr = new Joystick2D(eu_ptr);
+        if (eu_ptr->setup_file()) {
+            thread file_thread(&ExperimentalUtilities::write_to_file, eu_ptr, pBase, true);
+            thread loop_thread(&Joystick2D::loop, joystick_ptr, pBase);
             loop_thread.detach();
             file_thread.join();
-            time(&end); 
-            double time_taken = double(end - start); 
-            cout << "TOTAL EXECUTION TIME: " << time_taken << " SECONDS" << endl;
-            outfile << "TOTAL EXECUTION TIME: " << time_taken << " SECONDS" << endl;
         }
-        outfile.close();
     }
     // Close API session
     pSessionMng->CloseSession();

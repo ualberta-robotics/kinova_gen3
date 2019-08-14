@@ -20,11 +20,11 @@
 #include "gen3_commands.h"
 
 #define MODE_TRANS 0 // Translation Mode
-#define MODE_WRIST 1 // Wrist Orientation Mode
+#define MODE_ORTN 1 // Wrist Orientation Mode
 #define MODE_GRIPPER 2 // Finger Mode
 
 class Joystick3D {
-	protected:
+protected:
 	ExperimentalUtilities * util_ptr;
 	bool quit;
 	int mode;
@@ -32,8 +32,8 @@ class Joystick3D {
 	double gripper;
 	array<double, 6> motion;
 
-	public:
-	Joystick3D(ExperimentalUtilities * util_ptr_) : 
+public:
+	Joystick3D (ExperimentalUtilities * util_ptr_) : 
 		util_ptr(util_ptr_),
 		quit(false),
 		mode(0),
@@ -58,13 +58,13 @@ class Joystick3D {
 	{
 	    switch (mode) {
 	        case MODE_TRANS:
-	            std::cout << "\nTRANSLATION MODE" << std::endl;
+	            std::cout << "\nTranslation Mode" << std::endl;
 	            break;
-	        case MODE_WRIST:
-	            std::cout << "\nWRIST ORIENTATION MODE" << std::endl;
+	        case MODE_ORTN:
+	            std::cout << "\nWrist Orientation Mode" << std::endl;
 	            break;
 	        case MODE_GRIPPER:
-	            std::cout << "\nGRIPPER MODE" << std::endl;
+	            std::cout << "\nGripper Mode" << std::endl;
 	            break;
 	        default:
 	            break;
@@ -109,13 +109,14 @@ class Joystick3D {
 			case MODE_TRANS:
 				v = {map_x((double)e.z), map_x((double)-e.x), map_x((double)-e.ry), 0, 0, 0};
 				break;
-			case MODE_WRIST:
+			case MODE_ORTN:
 				v = {0, 0, 0, map_x((double)(e.z - e.rx)*0.8), map_x((double)(e.x + e.rz)*0.8), map_x((double)-e.ry)};
 				break;
 			case MODE_GRIPPER:
 				v = {0, 0, 0, 0, 0, 0};
 				x = map_x((double)e.z);
 				if (x != gripper) {
+					util_ptr->set_gripper_value(x);
 					send_gripper_command(pBase, x);
 					gripper = x;
 				}
@@ -152,9 +153,9 @@ class Joystick3D {
 					array<double, 6> new_motion;
 					// cout << sev.motion.x << " " << sev.motion.y << " " << sev.motion.z << " " << sev.motion.rx << " " << sev.motion.ry << " " << sev.motion.rz << endl;
 					if (handle_motion(pBase, sev.motion, new_motion)) {
-						util_ptr->set_motion_value(new_motion);
 						motion = new_motion;
-						send_twist_command(pBase, new_motion, 0);
+						util_ptr->set_motion_value(motion);
+						send_twist_command(pBase, motion, 0);
 					} 
 				} else if (sev.button.press) {    /* SPNAV_EVENT_BUTTON */
 					handle_button(sev.button.bnum);
@@ -165,7 +166,7 @@ class Joystick3D {
 		util_ptr->write_mode_count(count);
 	}
 
-	private:
+private:
 };   
 
 int main(int argc, char **argv)

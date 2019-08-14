@@ -12,8 +12,8 @@
 //
 // Copyright Drew Noakes 2013-2016
 
-#ifndef __JOYSTICK2D_HH__
-#define __JOYSTICK2D_HH__
+#ifndef __JOYSTICK_BOX_HH__
+#define __JOYSTICK_BOX_HH__
 
 #include <string>
 #include <iostream>
@@ -25,7 +25,7 @@
 /**
  * Encapsulates all data relevant to a sampled joystick event.
  */
-class Joystick2DEvent
+class JoystickBoxEvent
 {
 public:
 	/** Minimum value of axes range */
@@ -85,19 +85,19 @@ public:
 	 * The ostream inserter needs to be a friend so it can access the
 	 * internal data structures.
 	 */
-	friend std::ostream& operator<<(std::ostream& os, const Joystick2DEvent& e);
+	friend std::ostream& operator<<(std::ostream& os, const JoystickBoxEvent& e);
 };
 
 /**
  * Stream insertion function so you can do this:
  *    cout << event << endl;
  */
-std::ostream& operator<<(std::ostream& os, const Joystick2DEvent& e);
+std::ostream& operator<<(std::ostream& os, const JoystickBoxEvent& e);
 
 /**
  * Represents a joystick device. Allows data to be sampled from it.
  */
-class Joystick2D
+class JoystickBox
 {
 private:
 	void openPath(std::string devicePath, bool blocking=false);
@@ -105,39 +105,39 @@ private:
 	int _fd;
 	
 public:
-	~Joystick2D();
+	~JoystickBox();
 
 	/**
 	 * Initialises an instance for the first joystick: /dev/input/js0
 	 */
-	Joystick2D();
+	JoystickBox();
 
 	/**
 	 * Initialises an instance for the joystick with the specified,
 	 * zero-indexed number.
 	 */
-	Joystick2D(int joystickNumber);
+	JoystickBox(int joystickNumber);
 
 	/**
 	 * Initialises an instance for the joystick device specified.
 	 */
-	Joystick2D(std::string devicePath);
+	JoystickBox(std::string devicePath);
 
 	/**
 	 * Joystick objects cannot be copied
 	 */
-	Joystick2D(Joystick2D const&) = delete;
+	JoystickBox(JoystickBox const&) = delete;
 
 	/**
 	 * Joystick objects can be moved
 	 */
-	Joystick2D(Joystick2D &&) = default;
+	JoystickBox(JoystickBox &&) = default;
 
 	/**
 	 * Initialises an instance for the joystick device specified and provide
 	 * the option of blocking I/O.
 	 */
-	Joystick2D(std::string devicePath, bool blocking);
+	JoystickBox(std::string devicePath, bool blocking);
  
 	/**
 	 * Returns true if the joystick was found and may be used, otherwise false.
@@ -145,10 +145,10 @@ public:
 	bool isFound();
 	
 	/**
-	 * Attempts to populate the provided Joystick2DEvent instance with data
+	 * Attempts to populate the provided JoystickBoxEvent instance with data
 	 * from the joystick. Returns true if data is available, otherwise false.
 	 */
-	bool sample(Joystick2DEvent* event);
+	bool sample(JoystickBoxEvent* event);
 };
 
 #endif

@@ -25,7 +25,7 @@ set(CMAKE_COLOR_MAKEFILE        ON)
 set(BUILD_SHARED_LIBS           OFF)
 
 set(HEADERS_DIR "${PROJECT_SOURCE_DIR}/../include/")
-set(SOURCES ${HEADERS_DIR}joystick2d.cc ${HEADERS_DIR}joystick2d.hh)
+set(SOURCES ${HEADERS_DIR}joystickBox.cc ${HEADERS_DIR}joystickBox.hh)
 
 set(TARGET_EXE_NAME "2DJoystick")
 add_executable(${TARGET_EXE_NAME} joystick2D.cpp ${SOURCES})
