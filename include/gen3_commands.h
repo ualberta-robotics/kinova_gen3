@@ -34,8 +34,11 @@ void send_joint_angle_command(k_api::Base::BaseClient* base, std::vector<float> 
 void send_twist_command(k_api::Base::BaseClient* pBase, const std::array<double, 6> &target, int execution_time=0)
 {
     auto command = k_api::Base::TwistCommand();
-    command.set_mode(k_api::Base::UNSPECIFIED_TWIST_MODE);
+    // command.set_allocated_twist(k_api::Base::UNSPECIFIED_TWIST_MODE);
     command.set_duration(execution_time);  // Unlimited time to execute
+    // k_api::Base::TwistMode mode;
+    // mode = command.mode();
+    // std::cout << "mode: " << command.has_twist() << std::endl;
     auto twist = command.mutable_twist();
     twist->set_linear_x(target.at(0));
     twist->set_linear_y(target.at(1));
@@ -43,7 +46,7 @@ void send_twist_command(k_api::Base::BaseClient* pBase, const std::array<double,
     twist->set_angular_x(target.at(3));
     twist->set_angular_y(target.at(4));
     twist->set_angular_z(target.at(5));
-    pBase->SendTwistCommand(command);
+    // pBase->SendTwistCommand(command);
     // std::cout << "SENDING NEW COMMAND: ";
     // for (int i = 0; i < target.size(); ++i) {
     //     std::cout << target.at(i) << " ";

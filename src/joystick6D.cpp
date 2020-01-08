@@ -22,7 +22,6 @@
 #define MODE_MOTION 0 // Motion Mode
 #define MODE_GRIPPER 1 // Finger Mode
 
-
 class Joystick6D {
 protected:
 	ExperimentalUtilities * util_ptr;
@@ -42,10 +41,11 @@ public:
 		count(0)
 	{
 		if (spnav_open() == -1) {
-			fprintf(stderr, "failed to connect to the space navigator daemon\n");
+			fprintf(stderr, "Failed to connect to the space navigator daemon\n");
 			util_ptr->set_quit(true);
 			exit(0);
 		}
+        std::cout << "Joystick6D object created" << std::endl;
 	}
 
 	~Joystick6D() 
@@ -159,49 +159,66 @@ private:
 
 int main(int argc, char **argv)
 {
-	// Setup API
-	auto errorCallback =  [](k_api::KError err){ cout << "_________ callback error _________" << err.toString(); };
-	auto pTransport = new k_api::TransportClientUdp();
-	auto pRouter = new k_api::RouterClient(pTransport, errorCallback);
-	pTransport->connect(IP_ADDRESS, PORT);
-	// Create session
-	auto createSessionInfo = k_api::Session::CreateSessionInfo();
-	createSessionInfo.set_username("iris");
-	createSessionInfo.set_password("IRIS");
-	createSessionInfo.set_session_inactivity_timeout(60000);   // (milliseconds)
-	createSessionInfo.set_connection_inactivity_timeout(2000); // (milliseconds)
-	cout << "\nCreating session for communication" << endl;
-	auto pSessionMng = new k_api::SessionManager(pRouter);
-	pSessionMng->CreateSession(createSessionInfo);
-	cout << "Session created\n" << endl;
-	// Create required services
-	auto pBase = new k_api::Base::BaseClient(pRouter);
-	send_joint_angle_command(pBase, start_position_angles, 7000);
+    // Setup API
+    auto error_callback = [](k_api::KError err){ cout << "_________ callback error _________" << err.toString(); };
+    auto transport = new k_api::TransportClientTcp();
+    auto router = new k_api::RouterClient(transport, error_callback);
+    transport->connect(IP_ADDRESS, PORT);
+
+    // Set session data connection information
+    auto create_session_info = k_api::Session::CreateSessionInfo();
+    create_session_info.set_username("iris");
+    create_session_info.set_password("IRIS");
+    create_session_info.set_session_inactivity_timeout(60000);   // (milliseconds)
+    create_session_info.set_connection_inactivity_timeout(2000); // (milliseconds)
+
+    // Session manager service wrapper
+    std::cout << "Creating session for communication" << std::endl;
+    auto session_manager = new k_api::SessionManager(router);
+    try {
+        session_manager->CreateSession(create_session_info);
+    } catch (...) {
+        cout << "Session could not be created. Check if robot is connected and try again\n" << endl;
+        exit(0);
+    }
+    std::cout << "Session created" << std::endl;
+
+    // Create DeviceConfigClient and BaseClient
+    auto device_config = new k_api::DeviceConfig::DeviceConfigClient(router);
+    auto base = new k_api::Base::BaseClient(router);
+
+    // After you're done, here's how to tear down the API
+    send_joint_angle_command(base, start_position_angles, 7000);
     // Setup outfile if required and run program
 	if (argc <= 2) {
 		ExperimentalUtilities * eu_ptr = new ExperimentalUtilities(6, "", "");
 		cout << "\nTo save data to file call program with args [TASK] [PARTICIPANT]" << endl;
 		cout << "Running without saving data" << endl;
 		Joystick6D * joystick_ptr = new Joystick6D(eu_ptr);
-		joystick_ptr->loop(pBase);
+		joystick_ptr->loop(base);
 	} else {
 		ExperimentalUtilities * eu_ptr = new ExperimentalUtilities(6, string(argv[1]), string(argv[2]));
 		Joystick6D * joystick_ptr = new Joystick6D(eu_ptr);
 		if (eu_ptr->setup_file()) {
-			thread file_thread(&ExperimentalUtilities::write_to_file, eu_ptr, pBase, true);
-			thread loop_thread(&Joystick6D::loop, joystick_ptr, pBase);
+			thread file_thread(&ExperimentalUtilities::write_to_file, eu_ptr, base, true);
+			thread loop_thread(&Joystick6D::loop, joystick_ptr, base);
 			loop_thread.detach();
 			file_thread.join();
 		}
 	}
-	// Close API session
-	pSessionMng->CloseSession();
-	// Deactivate the router and cleanly disconnect from the transport object
-	pRouter->SetActivationStatus(false);
-	pTransport->disconnect();
-	// Destroy the API
-	delete pBase;
-	delete pSessionMng;
-	delete pRouter;
-	delete pTransport;
+    // Close API session
+    session_manager->CloseSession();
+
+    // Deactivate the router and cleanly disconnect from the transport object
+    router->SetActivationStatus(false);
+    transport->disconnect();
+
+    // Destroy the API
+    delete base;
+    delete device_config;
+    delete session_manager;
+    delete router;
+    delete transport;
+
+    return 0;
 };
