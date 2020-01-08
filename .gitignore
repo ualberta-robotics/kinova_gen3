@@ -2,3 +2,4 @@ kortex_api/
 bin/
 build/
 sessions/
+input_devices/
