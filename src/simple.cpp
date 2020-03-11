@@ -16,23 +16,21 @@
 */
 
 #include "spnavkinova.h"
-#include "experimental_utilities.h"
+// #include "experimental_utilities.h"
 // #include "gen3_commands.h"
 
 
 class SpaceMouseExample {
 protected:
-	ExperimentalUtilities * util_ptr;
 	bool quit;
 
 public:
-	SpaceMouseExample (ExperimentalUtilities * util_ptr_) : 
-		util_ptr(util_ptr_),
-		quit(false),
+	SpaceMouseExample() : 
+		quit(false)
 	{
 		if (spnav_open() == -1) {
 			fprintf(stderr, "Failed to connect to the space navigator daemon\n");
-			util_ptr->set_quit(true);
+			quit = true;
 			exit(0);
 		}
         std::cout << "SpaceMouseExample object created" << std::endl;
@@ -40,7 +38,7 @@ public:
 
 	~SpaceMouseExample() 
 	{
-		util_ptr->set_quit(true);
+		quit = true;
 		spnav_close();
 	}
 
@@ -48,13 +46,11 @@ public:
 	{
 		if (button == 1) {
 			quit = true;
-			util_ptr->set_quit(quit);
 		} 
 	}
 
 	void loop()
 	{
-		util_ptr->start_timer();
 		while (!quit) {
 			usleep(1000);
 			spnav_event sev;
@@ -66,7 +62,6 @@ public:
 				}
 			}
 		}
-		util_ptr->stop_timer();
 	}
 
 private:
@@ -74,10 +69,8 @@ private:
 
 int main(int argc, char **argv)
 {
-    // Setup outfile if required and run program
 	if (argc <= 2) {
-		ExperimentalUtilities * eu_ptr = new ExperimentalUtilities(6, "", "");
-		SpaceMouseExample * joystick_ptr = new SpaceMouseExample(eu_ptr);
+		SpaceMouseExample * joystick_ptr = new SpaceMouseExample();
 		joystick_ptr->loop();
 	} 
 
