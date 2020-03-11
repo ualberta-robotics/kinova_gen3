@@ -16,6 +16,19 @@
 */
 
 #include "spnavkinova.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <array>
+#include <cmath>
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+#include <chrono>
+#include <ctime>
+#include <cstddef>
+#include <thread>
+#include <bits/stdc++.h> 
 // #include "experimental_utilities.h"
 // #include "gen3_commands.h"
 
