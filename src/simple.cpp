@@ -29,9 +29,11 @@
 #include <cstddef>
 #include <thread>
 #include <bits/stdc++.h> 
+#include <unistd.h> 
 // #include "experimental_utilities.h"
 // #include "gen3_commands.h"
 
+using namespace std;
 
 class SpaceMouseExample {
 protected:
