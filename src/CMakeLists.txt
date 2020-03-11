@@ -27,6 +27,17 @@ set(BUILD_SHARED_LIBS           OFF)
 set(HEADERS_DIR "${PROJECT_SOURCE_DIR}/../include/")
 set(SOURCES ${HEADERS_DIR}joystickBox.cc ${HEADERS_DIR}joystickBox.hh)
 
+set(TARGET_EXE_NAME "SpaceMouseExample")
+add_executable(${TARGET_EXE_NAME} simple.cpp)
+
+target_compile_options(${TARGET_EXE_NAME} PRIVATE -Wall)
+target_compile_options(${TARGET_EXE_NAME} PRIVATE -Wno-reorder)
+target_compile_features(${TARGET_EXE_NAME} PRIVATE cxx_std_11)
+target_compile_definitions(${TARGET_EXE_NAME} PRIVATE -D_OS_UNIX)
+
+target_link_libraries(${TARGET_EXE_NAME} PRIVATE pthread spnav)
+target_include_directories(${TARGET_EXE_NAME} PRIVATE ${HEADERS_DIR})
+
 set(TARGET_EXE_NAME "2DJoystick")
 add_executable(${TARGET_EXE_NAME} joystick2D.cpp ${SOURCES})
 
