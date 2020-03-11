@@ -216,8 +216,8 @@ int main(int argc, char **argv)
     auto device_config = new k_api::DeviceConfig::DeviceConfigClient(router);
     auto base = new k_api::Base::BaseClient(router);
 
-    // After you're done, here's how to tear down the API
-    send_joint_angle_command(base, start_position_angles, 7000);
+    // send_joint_angle_command(base, start_position_angles, 7000);
+    
     // Setup outfile if required and run program
     if (argc <= 2) {
         ExperimentalUtilities * eu_ptr = new ExperimentalUtilities(2, "", "");
