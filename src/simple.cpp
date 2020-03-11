@@ -1,69 +1,85 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <signal.h>
-#include <X11/Xlib.h>
-#include <spnav.h>
+/*
+* KINOVA (R) KORTEX (TM)
+*
+* Copyright (c) 2018 Kinova inc. All rights reserved.
+*
+* This software may be modified and distributed
+* under the terms of the BSD 3-Clause license.
+*
+* Refer to the LICENSE file for details.
+*
+*/
 
-void sig(int s)
-{
-	spnav_close();
-	exit(0);
-}
+/* 
+* Author: Laura Petrich
+* Date: March 11, 2020
+*/
 
-int main(void)
-{
+#include "spnavkinova.h"
+#include "experimental_utilities.h"
+// #include "gen3_commands.h"
 
-#if defined(BUILD_X11)
-	Display *dpy;
-	Window win;
-	unsigned long bpix;
-#endif
 
-	spnav_event sev;
+class SpaceMouseExample {
+protected:
+	ExperimentalUtilities * util_ptr;
+	bool quit;
 
-	signal(SIGINT, sig);
-
-#if defined(BUILD_X11)
-
-	if(!(dpy = XOpenDisplay(0))) {
-		fprintf(stderr, "failed to connect to the X server\n");
-		return 1;
-	}
-	bpix = BlackPixel(dpy, DefaultScreen(dpy));
-	win = XCreateSimpleWindow(dpy, DefaultRootWindow(dpy), 0, 0, 1, 1, 0, bpix, bpix);
-
-	/* This actually registers our window with the driver for receiving
-	 * motion/button events through the 3dxsrv-compatible X11 protocol.
-	 */
-	if(spnav_x11_open(dpy, win) == -1) {
-		fprintf(stderr, "failed to connect to the space navigator daemon\n");
-		return 1;
-	}
-
-#elif defined(BUILD_AF_UNIX)
-	if(spnav_open()==-1) {
-	  	fprintf(stderr, "failed to connect to the space navigator daemon\n");
-		return 1;
-	}
-#else
-#error Unknown build type!
-#endif
-
-	/* spnav_wait_event() and spnav_poll_event(), will silently ignore any non-spnav X11 events.
-	 *
-	 * If you need to handle other X11 events you will have to use a regular XNextEvent() loop,
-	 * and pass any ClientMessage events to spnav_x11_event, which will return the event type or
-	 * zero if it's not an spnav event (see spnav.h).
-	 */
-	while(spnav_wait_event(&sev)) {
-		if(sev.type == SPNAV_EVENT_MOTION) {
-			printf("got motion event: t(%d, %d, %d) ", sev.motion.x, sev.motion.y, sev.motion.z);
-			printf("r(%d, %d, %d)\n", sev.motion.rx, sev.motion.ry, sev.motion.rz);
-		} else {	/* SPNAV_EVENT_BUTTON */
-			printf("got button %s event b(%d)\n", sev.button.press ? "press" : "release", sev.button.bnum);
+public:
+	SpaceMouseExample (ExperimentalUtilities * util_ptr_) : 
+		util_ptr(util_ptr_),
+		quit(false),
+	{
+		if (spnav_open() == -1) {
+			fprintf(stderr, "Failed to connect to the space navigator daemon\n");
+			util_ptr->set_quit(true);
+			exit(0);
 		}
+        std::cout << "SpaceMouseExample object created" << std::endl;
 	}
 
-	spnav_close();
-	return 0;
-}
+	~SpaceMouseExample() 
+	{
+		util_ptr->set_quit(true);
+		spnav_close();
+	}
+
+	void handle_button(int button) 
+	{
+		if (button == 1) {
+			quit = true;
+			util_ptr->set_quit(quit);
+		} 
+	}
+
+	void loop()
+	{
+		util_ptr->start_timer();
+		while (!quit) {
+			usleep(1000);
+			spnav_event sev;
+			if (spnav_poll_event(&sev)) {
+				if (sev.type == SPNAV_EVENT_MOTION) {
+					cout << sev.motion.x << " " << sev.motion.y << " " << sev.motion.z << " " << sev.motion.rx << " " << sev.motion.ry << " " << sev.motion.rz << endl;
+				} else if (sev.button.press) {    /* SPNAV_EVENT_BUTTON */
+					handle_button(sev.button.bnum);
+				}
+			}
+		}
+		util_ptr->stop_timer();
+	}
+
+private:
+};   
+
+int main(int argc, char **argv)
+{
+    // Setup outfile if required and run program
+	if (argc <= 2) {
+		ExperimentalUtilities * eu_ptr = new ExperimentalUtilities(6, "", "");
+		SpaceMouseExample * joystick_ptr = new SpaceMouseExample(eu_ptr);
+		joystick_ptr->loop();
+	} 
+
+    return 0;
+};
